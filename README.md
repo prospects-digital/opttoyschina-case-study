@@ -16,7 +16,7 @@
 [![Catalog](https://img.shields.io/badge/catalog-389%2C000_SKUs-0A0E1C?style=for-the-badge)](https://opttoyschina.com/optom/)
 [![Cold sort](https://img.shields.io/badge/cold_sort-9%2C663ms_→_18ms-E87B00?style=for-the-badge)](#-from-96-seconds-to-18-milliseconds)
 
-[![Google PageSpeed](https://img.shields.io/badge/Google_PageSpeed-99%2F100_desktop_·_91%2F100_mobile-0A0E1C?style=for-the-badge&logo=googlechrome&logoColor=white)](https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fopttoyschina.com%2F)
+[![Google PageSpeed](https://img.shields.io/badge/Google_PageSpeed-98%2B_desktop_·_96%2B_mobile-0A0E1C?style=for-the-badge&logo=googlechrome&logoColor=white)](https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fopttoyschina.com%2F)
 [![Visual search](https://img.shields.io/badge/📷_visual_search-in_the_browser%2C_no_app-E87B00?style=for-the-badge)](#-photograph-a-toy-find-the-factory-sku)
 
 <br>
@@ -47,6 +47,7 @@
 - [🕷️ Crawl engineering: indexing 389,000 pages](#%EF%B8%8F-crawl-engineering-getting-389000-pages-actually-indexed)
 - [📏 How we measure (the audit, not the anecdote)](#-how-we-actually-measure-the-audit-not-the-anecdote)
 - [📊 Results at a glance](#-results-at-a-glance)
+- [⚡ Postscript: shipping 91 to 96 in one day](#-postscript-shipping-91-to-96-in-one-day)
 - [🤝 Want a system like this?](#-want-a-system-like-this-work-with-prospects-digital)
 
 ---
@@ -62,7 +63,7 @@
 | 🔍 | Full‑catalog search under a latency budget | FT → trigram → vector cascade | **6–15 ms, provable** |
 | 📷 | You can't *type* a shape | in‑browser camera search over the whole catalog | **photo → factory SKU** |
 
-**Google's own verdict** (PageSpeed / Lighthouse lab, homepage, measured 25 Jul 2026): performance **99/100 desktop · 91/100 mobile**, SEO **100/100**, Total Blocking Time **0 ms**, CLS **0.001**. Lab scores wobble a point or two between runs — [run it yourself](https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fopttoyschina.com%2F) for today's number.
+**Google's own verdict** (PageSpeed / Lighthouse lab, homepage, three consecutive runs on 25 Jul 2026): performance **98–99/100 desktop · 96–97/100 mobile**, SEO **100/100**, Total Blocking Time **0 ms**, CLS **0.001**. Mobile started at 91 — the postscript at the end of this document is the story of closing that gap. Lab scores wobble a point or two between runs — [run it yourself](https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fopttoyschina.com%2F) for today's number.
 
 If any row describes a fire you're currently fighting, the sections below are the post‑mortems.
 
@@ -390,7 +391,7 @@ This is the part that separates a case study from a brag: the numbers are reprod
 
 > **Verify us in 30 seconds:** open [opttoyschina.com/optom/](https://opttoyschina.com/optom/) → press <kbd>F12</kbd> → **Network** → run a search or sort by price → click the request → read the `Server-Timing` header. That's our performance claim, measured in *your* browser.
 >
-> **Or let Google referee:** paste the site into [PageSpeed Insights](https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fopttoyschina.com%2F) and read the scores yourself. Our lab run of 25 Jul 2026: **99/100 desktop, 91/100 mobile, SEO 100/100, TBT 0 ms** — but don't quote us, run it.
+> **Or let Google referee:** paste the site into [PageSpeed Insights](https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fopttoyschina.com%2F) and read the scores yourself. Our three consecutive runs of 25 Jul 2026: **99/98 desktop, 96/96/97 mobile, SEO 100/100, TBT 0 ms** — but don't quote us, run it.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -406,8 +407,32 @@ This is the part that separates a case study from a brag: the numbers are reprod
 | 🌍 Global delivery | **one edge‑cached HTML**, client‑side locale, ~30 ms trace |
 | 🕷️ Crawlability | YandexBot `403 → 200` · ~160k‑URL sitemap · IndexNow · deterministic pagination |
 | 📷 Visual search | photograph a sample in the browser → factory SKU, no app install |
-| 🏁 Google PageSpeed (lab, 25 Jul 2026) | performance **99/100 desktop · 91/100 mobile** · SEO **100/100** · TBT **0 ms** · CLS **0.001** |
+| 🏁 Google PageSpeed (lab, 25 Jul 2026, 3 consecutive runs) | performance **98–99 desktop · 96–97 mobile** · SEO **100/100** · TBT **0 ms** · CLS **0.001** · mobile LCP **3.4 s → 2.6 s** (see postscript) |
 | 🔎 Transparency | open `Server-Timing` · structured data that matches tiered pricing |
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+---
+
+## ⚡ Postscript: shipping 91 to 96 in one day
+
+When we first published this case study, Google's mobile score was **91** — LCP 3.4 s. Good, not great. This postscript is the sprint that closed the gap, kept honest.
+
+**The wrong hypothesis — ours.** FCP was 1.4 s but LCP 3.4 s: a ~2-second render delay on an image that was already preloaded, 15 KB, `fetchpriority=high`. We suspected our own anti-FOUC locale guard was holding the hero. The audit refuted it: the LCP element was never inside the guarded set, and forcing the guarded path didn't move LCP at all. Publishing your own refuted hypothesis is cheaper than shipping a fix aimed at the wrong target.
+
+**The real culprit.** Under PSI's 4× CPU throttle, ~23 deferred scripts (~180 KB) plus the parse of a 93 KB all-locales dictionary executed in one burst at `DOMContentLoaded` — long tasks of 760–1031 ms landing *before* FCP. The image was downloaded by 1.2 s and then waited ~2 s for the main thread to give it a paint slot. TBT read 0 the whole time, because the damage was done before the TBT window even opened.
+
+**What shipped:**
+
+- **Chat widget → facade.** 36 KB now loads via `requestIdleCallback` after `load` (or on first touch, whichever comes first). The main-thread contention collapsed.
+- **Dictionary split per locale.** One 342 KB JSON for everyone → one 138–202 KB file for *your* locale only, fetched after the country resolves. Mobile LCP: **3.4 s → 2.6 s**.
+- **Poster `decoding="sync"` → `"async"`.** Free.
+
+**What we rolled back — on purpose.** Deferring the header bundle (71 KB) showed zero gain in back-to-back traces: idle fires before TTI, so execution lands inside the same window either way — and header JS hydrates auth state too early to be pushed past TTI without a dead header. No measured win → revert. A rollback with a reason attached is a result, not a failure.
+
+**Two process lessons worth stealing:** lab runs drift between windows, so only back-to-back comparisons are valid; and after any deploy that changes HTML, purge the edge cache — or returning visitors get the old HTML and pay for both dictionary variants during the transition.
+
+**Result, verified in three consecutive PSI runs:** mobile **96 / 96 / 97**, desktop **99 / 98**, LCP **2.6 s**, TBT **0 ms**, CLS **0.001**. Same architecture, same hardware — just execution order.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
